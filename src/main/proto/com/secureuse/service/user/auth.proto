@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package com.secureuser.service.proto.user.auth;
+
+option java_multiple_files = true;
+option java_outer_classname = "AuthProto";
+
+service AuthService {
+  rpc Register (RegisterRequest) returns (AuthResponse);
+  rpc Login (LoginRequest) returns (AuthResponse);
+  rpc RefreshToken (RefreshTokenRequest) returns (AuthResponse);
+}
+
+message RegisterRequest {
+  string login = 1;
+  string password = 2;
+  string email = 3;
+  string secret_word = 4;
+}
+
+message LoginRequest {
+  string login = 1;
+  string password = 2;
+}
+
+message RefreshTokenRequest {
+  string refresh_token = 1;
+}
+
+message AuthResponse {
+  int32 status_code = 1;
+  string message_code = 2;
+  string access_token = 3;
+  string refresh_token = 4;
+  string token_type = 5;
+  int64 expires_in = 6;
+  Error error = 7;
+  string registration_confirmation_link = 8;
+}
+
+message Error {
+  string error_message = 1;
+}

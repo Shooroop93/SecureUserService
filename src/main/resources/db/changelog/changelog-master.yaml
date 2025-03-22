@@ -1,0 +1,13 @@
+databaseChangeLog:
+  - include:
+      file: db/changelog/changeset/v1/create_extension/create_extension_master/changelog-create-extension-master.yaml
+  - include:
+      file: db/changelog/changeset/v1/create_table/create_table_master/changelog-create-table-master.yaml
+  - include:
+      file: db/changelog/changeset/v1/added_column/added_column_master/changelog-added-column-master.yaml
+  - include:
+      file: db/changelog/changeset/v1/added_constraints/added_constraints_master/changelog-added-constraints-master.yaml
+  - include:
+      file: db/changelog/changeset/v1/added_indexes/added_indexes_master/changelog-add-indexes-master.yaml
+  - include:
+      file: db/changelog/changeset/v1/added_comments/added_comments_master/changelog-added-comments-master.yaml
