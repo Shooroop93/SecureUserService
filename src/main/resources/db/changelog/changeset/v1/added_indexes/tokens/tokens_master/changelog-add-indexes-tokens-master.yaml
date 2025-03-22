@@ -1,0 +1,3 @@
+databaseChangeLog:
+  - include:
+      file: db/changelog/changeset/v1/added_indexes/tokens/add_indexes_tokens_v1.sql

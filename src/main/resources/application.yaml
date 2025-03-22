@@ -1,0 +1,43 @@
+spring:
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
+  application:
+    name: user_service
+  user:
+    registration:
+      require-verification: true
+    confirmation-link:
+      retention-time: 1440
+  profiles:
+    active: dev,secrets
+  liquibase:
+    enabled: true
+    change-log: classpath:/db/changelog/changelog-master.yaml
+    contexts: dev,prod
+  jpa:
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        format_sql: true
+logging:
+  level:
+    root: INFO
+    org.hibernate.SQL: debug
+    org.hibernate.type.descriptor.sql: TRACE
+    com.secureuser.service.model.listener: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+server:
+  url: http://localhost:8080
+  port: 8080
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+grpc:
+  server:
+    port: 9091
+security:
+  bcrypt:
+    strength: 10

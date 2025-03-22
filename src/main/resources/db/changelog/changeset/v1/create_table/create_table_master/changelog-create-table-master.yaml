@@ -1,0 +1,13 @@
+databaseChangeLog:
+  - include:
+      file: db/changelog/changeset/v1/create_table/create-table-users.sql
+  - include:
+      file: db/changelog/changeset/v1/create_table/create-table-platforms.sql
+  - include:
+      file: db/changelog/changeset/v1/create_table/create-table-roles.sql
+  - include:
+      file: db/changelog/changeset/v1/create_table/create-table-user-platforms.sql
+  - include:
+      file: db/changelog/changeset/v1/create_table/create-table-user-roles.sql
+  - include:
+      file: db/changelog/changeset/v1/create_table/create-table-tokens.sql
