@@ -29,7 +29,7 @@ public class AuthServiceImpl extends AuthServiceGrpc.AuthServiceImplBase {
 
     @Override
     public void register(RegisterRequest request, StreamObserver<AuthResponse> response) {
-        if (request.getLogin().isBlank() || request.getPassword().isBlank()) {
+        if (request.getLogin().isBlank() || request.getPassword().isBlank() || !EmailValidator.getInstance().isValid(request.getEmail())) {
             sendErrorMessage(HttpResponseStatus.BAD_REQUEST.code(), "BAD_REQUEST", "Incorrectly filled data in the request", response);
             return;
         }
@@ -67,12 +67,8 @@ public class AuthServiceImpl extends AuthServiceGrpc.AuthServiceImplBase {
 
         AuthResponse.Builder responseBuilder = AuthResponse.newBuilder();
 
-        log.info("logging in: {}", request.getLogin());
-        if (request.getLogin().contains("@") && EmailValidator.getInstance().isValid(request.getLogin())) {
-            loginService.authenticationWithEmail(request.getLogin(), request.getPassword(), responseBuilder);
-        } else {
-            loginService.authenticationWithLogin(request.getLogin(), request.getPassword(), responseBuilder);
-        }
+        log.info("Attempting login: {}", request.getLogin());
+        loginService.authenticationWithEmail(request.getLogin(), request.getPassword(), responseBuilder);
 
         response.onNext(responseBuilder.build());
         response.onCompleted();

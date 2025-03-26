@@ -20,8 +20,8 @@ public class LoginService {
     private boolean isRequireVerification;
     private final UsersService usersService;
 
-    public void authenticationWithEmail(String email, String password, AuthResponse.Builder responseBuilder) {
-        Optional<Users> user = findUserByLoginOrEmail(email, responseBuilder);
+    public void authenticationWithEmail(String loginOrEmail, String password, AuthResponse.Builder responseBuilder) {
+        Optional<Users> user = findUserByLoginOrEmail(loginOrEmail, responseBuilder);
         if (user.isEmpty()) {
             return;
         }
@@ -29,21 +29,6 @@ public class LoginService {
         if (!checkAccountConfirmation(user.get(), responseBuilder)) {
             return;
         }
-
-
-    }
-
-    public void authenticationWithLogin(String login, String password, AuthResponse.Builder responseBuilder) {
-        Optional<Users> user = findUserByLoginOrEmail(login, responseBuilder);
-        if (user.isEmpty()) {
-            return;
-        }
-
-        if (!checkAccountConfirmation(user.get(), responseBuilder)) {
-            return;
-        }
-
-
     }
 
     private Optional<Users> findUserByLoginOrEmail(String loginOrEmail, AuthResponse.Builder responseBuilder) {
