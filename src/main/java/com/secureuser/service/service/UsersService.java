@@ -57,4 +57,9 @@ public class UsersService {
     public boolean existsByLoginOrEmail(String login, String email) {
         return usersRepository.existsByLoginOrEmail(login, email);
     }
+
+    @Transactional(readOnly = true)
+    public Optional<Users> findByLoginOrEmail(String login, String email) {
+        return usersRepository.findByLoginOrEmail(login, email);
+    }
 }
