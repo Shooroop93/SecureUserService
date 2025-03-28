@@ -3,3 +3,5 @@ databaseChangeLog:
       file: db/changelog/changeset/v1/added_column/users/add_column_users_v1.sql
   - include:
       file: db/changelog/changeset/v1/added_column/users/add_column_users_v2.sql
+  - include:
+      file: db/changelog/changeset/v1/added_column/tokens/add_column_tokens_v1.sql
