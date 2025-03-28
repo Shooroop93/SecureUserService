@@ -1,8 +1,8 @@
 spring:
+  application:
+    name: SecureUserService
   autoconfigure:
     exclude: org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
-  application:
-    name: user_service
   user:
     registration:
       require-verification: true

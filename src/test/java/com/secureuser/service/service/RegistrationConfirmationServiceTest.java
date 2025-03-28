@@ -4,9 +4,10 @@ import com.secureuser.service.exception.DatabaseOperationException;
 import com.secureuser.service.model.Users;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -14,10 +15,17 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.util.Map;
 import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.anyLong;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+@ExtendWith(MockitoExtension.class)
 class RegistrationConfirmationServiceTest {
 
     @Mock
@@ -31,14 +39,11 @@ class RegistrationConfirmationServiceTest {
 
     @BeforeEach
     void setUp() {
-        MockitoAnnotations.openMocks(this);
-
         ReflectionTestUtils.setField(confirmationService, "baseUrl", "http://localhost");
         ReflectionTestUtils.setField(confirmationService, "confirmationEndpoint", "/api/auth/confirm");
         ReflectionTestUtils.setField(confirmationService, "isRequireVerification", true);
         ReflectionTestUtils.setField(confirmationService, "time", 60L);
     }
-
 
     @Test
     void testSave_Success() {
