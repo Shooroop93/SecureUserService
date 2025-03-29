@@ -4,20 +4,26 @@ import com.secureuser.service.constants.JWTokenType;
 import com.secureuser.service.dto.TokenObject;
 import com.secureuser.service.model.Tokens;
 import com.secureuser.service.model.Users;
+import com.secureuser.service.proto.user.auth.AuthResponse;
 import com.secureuser.service.repository.TokensRepository;
 import com.secureuser.service.utils.JwtUtils;
 import com.secureuser.service.utils.TimeUtils;
+import io.grpc.netty.shaded.io.netty.handler.codec.http.HttpResponseStatus;
 import io.jsonwebtoken.Jwts;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.Date;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
+import static com.secureuser.service.utils.GRPCHelperMessage.formulateAResponse;
 import static java.lang.String.format;
 
 @Service
@@ -38,7 +44,8 @@ public class TokenService {
     @Value("${spring.security.jwt.expiration.refresh}")
     private long expirationRefresh;
 
-    public TokenObject generateToken(Users user, JWTokenType tokenType) {
+    @Transactional(isolation = Isolation.SERIALIZABLE)
+    public TokenObject generateToken(Users user, JWTokenType tokenType, UUID sessionId) {
         log.info("Start generating JWT token for user: {}", user.getLogin());
 
         Instant now = Instant.now();
@@ -58,10 +65,10 @@ public class TokenService {
                         .issuer(projectName)
                         .subject(user.getId().toString())
                         .claim("token_type", tokenType.name())
+                        .claim("session_id", sessionId)
                         .audience().add("classmate-bot").and()
                         .issuedAt(createDate)
                         .expiration(expirationDate)
-
                         .claim("service_role", "USER")
         );
 
@@ -74,6 +81,7 @@ public class TokenService {
         tokenModel.setExpiresAt(TimeUtils.convertToLocalDateTime(expirationDate));
         tokenModel.setOwner(user);
         tokenModel.setTokenType(tokenType.name());
+        tokenModel.setSessionId(sessionId);
         user.addToken(tokenModel);
 
         tokensRepository.save(tokenModel);
@@ -87,6 +95,7 @@ public class TokenService {
         return jwtUtils.isTokenValid(token);
     }
 
+    @Transactional(isolation = Isolation.SERIALIZABLE)
     public void revokeAllUserTokens(Users user) {
         List<Tokens> validTokens = user.getTokens();
         validTokens.forEach(token -> {
@@ -94,6 +103,54 @@ public class TokenService {
             redisService.delete(generateKeyName(token.getTokenType(), token.getToken()));
         });
         tokensRepository.saveAll(validTokens);
+    }
+
+    @Transactional(isolation = Isolation.SERIALIZABLE)
+    public void revokeAllTokensBySessionId(Users user, UUID sessionId) {
+        List<Tokens> validTokens = user.getTokens();
+        if (validTokens == null || validTokens.isEmpty()) {
+            return;
+        }
+        validTokens.forEach(token -> {
+            if (token.getSessionId().equals(sessionId)) {
+                token.setRevoked(true);
+                redisService.delete(generateKeyName(token.getTokenType(), token.getToken()));
+            }
+        });
+        tokensRepository.saveAll(validTokens);
+    }
+
+    @Transactional(isolation = Isolation.SERIALIZABLE)
+    public void refreshToken(String refreshToken, AuthResponse.Builder responseBuilder) {
+        Optional<Tokens> tokensOptional = tokensRepository.findByToken(refreshToken);
+        if (tokensOptional.isEmpty()) {
+            formulateAResponse(HttpResponseStatus.UNAUTHORIZED.code(), "INVALID_CREDENTIALS", "The token is no longer valid", responseBuilder);
+            return;
+        }
+
+        Tokens refreshTokenForBD = tokensOptional.get();
+
+        if (refreshTokenForBD.getRevoked()) {
+            formulateAResponse(
+                    HttpResponseStatus.UNAUTHORIZED.code(),
+                    "INVALID_CREDENTIALS",
+                    "The token is no longer valid",
+                    responseBuilder
+            );
+            return;
+        }
+
+        Users owner = refreshTokenForBD.getOwner();
+        revokeAllTokensBySessionId(owner, refreshTokenForBD.getSessionId());
+
+        UUID sessionId = UUID.randomUUID();
+        TokenObject accessJWT = generateToken(owner, JWTokenType.ACCESS, sessionId);
+        TokenObject refreshJWT = generateToken(owner, JWTokenType.REFRESH, sessionId);
+        responseBuilder.setStatusCode(HttpResponseStatus.OK.code());
+        responseBuilder.setMessageCode(HttpResponseStatus.OK.reasonPhrase());
+        responseBuilder.setAccessToken(accessJWT.getToken());
+        responseBuilder.setRefreshToken(refreshJWT.getToken());
+        responseBuilder.setExpiresIn(accessJWT.getLifeTime());
     }
 
     private String generateKeyName(String typeToken, String idToken) {

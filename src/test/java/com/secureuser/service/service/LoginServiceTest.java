@@ -12,6 +12,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Optional;
+import java.util.UUID;
 
 import static com.secureuser.service.constants.JWTokenType.ACCESS;
 import static com.secureuser.service.constants.JWTokenType.REFRESH;
@@ -38,12 +39,13 @@ class LoginServiceTest {
     @Test
     void authenticationWithEmail_userNotFound_setsUnauthorizedError() {
         ReflectionTestUtils.setField(loginService, "isRequireVerification", true);
+        UUID sessionId = UUID.randomUUID();
         String email = "unknown@example.com";
         AuthResponse.Builder responseBuilder = AuthResponse.newBuilder();
 
         when(usersService.findByLoginOrEmail(email, email)).thenReturn(Optional.empty());
 
-        loginService.authenticationWithEmail(email, "password", responseBuilder);
+        loginService.authenticationWithEmail(email, "password", sessionId, responseBuilder);
 
         AuthResponse response = responseBuilder.build();
         assertEquals(401, response.getStatusCode());
@@ -55,6 +57,7 @@ class LoginServiceTest {
     void authenticationWithEmail_userNotVerified_setsForbiddenError() {
         ReflectionTestUtils.setField(loginService, "isRequireVerification", true);
         String email = "user@example.com";
+        UUID sessionId = UUID.randomUUID();
         AuthResponse.Builder responseBuilder = AuthResponse.newBuilder();
 
         Users user = new Users();
@@ -62,7 +65,7 @@ class LoginServiceTest {
 
         when(usersService.findByLoginOrEmail(email, email)).thenReturn(Optional.of(user));
 
-        loginService.authenticationWithEmail(email, "password", responseBuilder);
+        loginService.authenticationWithEmail(email, "password", sessionId, responseBuilder);
 
         AuthResponse response = responseBuilder.build();
         assertEquals(403, response.getStatusCode());
@@ -86,10 +89,12 @@ class LoginServiceTest {
 
         TokenObject accessToken = new TokenObject("access-token", 1);
         TokenObject refreshToken = new TokenObject("refresh-token", 3);
-        when(tokenService.generateToken(user, ACCESS)).thenReturn(accessToken);
-        when(tokenService.generateToken(user, REFRESH)).thenReturn(refreshToken);
+        UUID sessionId = UUID.randomUUID();
 
-        loginService.authenticationWithEmail(email, rawPassword, responseBuilder);
+        when(tokenService.generateToken(user, ACCESS, sessionId)).thenReturn(accessToken);
+        when(tokenService.generateToken(user, REFRESH, sessionId)).thenReturn(refreshToken);
+
+        loginService.authenticationWithEmail(email, rawPassword, sessionId, responseBuilder);
 
         AuthResponse response = responseBuilder.build();
         assertEquals(200, response.getStatusCode()); // Исправлено с 0 на 200
@@ -102,11 +107,12 @@ class LoginServiceTest {
     void authenticationWithEmail_verificationDisabled_userNotFound_setsUnauthorizedError() {
         ReflectionTestUtils.setField(loginService, "isRequireVerification", false);
         String email = "unknown@example.com";
+        UUID sessionId = UUID.randomUUID();
         AuthResponse.Builder responseBuilder = AuthResponse.newBuilder();
 
         when(usersService.findByLoginOrEmail(email, email)).thenReturn(Optional.empty());
 
-        loginService.authenticationWithEmail(email, "password", responseBuilder);
+        loginService.authenticationWithEmail(email, "password", sessionId, responseBuilder);
 
         AuthResponse response = responseBuilder.build();
         assertEquals(401, response.getStatusCode());
@@ -117,6 +123,8 @@ class LoginServiceTest {
     @Test
     void authenticationWithEmail_verificationDisabled_userExists_noError() {
         ReflectionTestUtils.setField(loginService, "isRequireVerification", false);
+        UUID sessionId = UUID.randomUUID();
+
         String email = "user@example.com";
         String rawPassword = "password";
         AuthResponse.Builder responseBuilder = AuthResponse.newBuilder();
@@ -129,12 +137,12 @@ class LoginServiceTest {
         when(bCryptPasswordEncoder.matches(rawPassword, "hashed-password")).thenReturn(true);
 
         TokenObject accessToken = new TokenObject("access-token", 1);
-        when(tokenService.generateToken(user, ACCESS)).thenReturn(accessToken);
+        when(tokenService.generateToken(user, ACCESS, sessionId)).thenReturn(accessToken);
 
         TokenObject refreshToken = new TokenObject("refresh-token", 3);
-        when(tokenService.generateToken(user, REFRESH)).thenReturn(refreshToken);
+        when(tokenService.generateToken(user, REFRESH, sessionId)).thenReturn(refreshToken);
 
-        loginService.authenticationWithEmail(email, rawPassword, responseBuilder);
+        loginService.authenticationWithEmail(email, rawPassword, sessionId, responseBuilder);
 
         AuthResponse response = responseBuilder.build();
         assertEquals(200, response.getStatusCode());

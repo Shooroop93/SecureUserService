@@ -40,6 +40,9 @@ public class Tokens {
     @Column(name = "token_type")
     private String tokenType;
 
+    @Column(name = "session_id")
+    private UUID sessionId;
+
     @ManyToOne
     @JoinColumn(name = "user_id", referencedColumnName = "id")
     private Users owner;
