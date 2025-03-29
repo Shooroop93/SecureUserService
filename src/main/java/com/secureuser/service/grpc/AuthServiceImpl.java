@@ -4,12 +4,14 @@ import com.secureuser.service.exception.DatabaseOperationException;
 import com.secureuser.service.proto.user.auth.AuthResponse;
 import com.secureuser.service.proto.user.auth.AuthServiceGrpc;
 import com.secureuser.service.proto.user.auth.LoginRequest;
+import com.secureuser.service.proto.user.auth.LogoutRequest;
 import com.secureuser.service.proto.user.auth.RefreshTokenRequest;
 import com.secureuser.service.proto.user.auth.RegisterRequest;
 import com.secureuser.service.service.LoginService;
 import com.secureuser.service.service.RegistrationConfirmationService;
 import com.secureuser.service.service.TokenService;
 import com.secureuser.service.service.UsersService;
+import com.secureuser.service.utils.JwtUtils;
 import io.grpc.netty.shaded.io.netty.handler.codec.http.HttpResponseStatus;
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +33,7 @@ public class AuthServiceImpl extends AuthServiceGrpc.AuthServiceImplBase {
     private final RegistrationConfirmationService registrationConfirmationService;
     private final LoginService loginService;
     private final TokenService tokenService;
+    private final JwtUtils jwtUtils;
 
     @Override
     public void register(RegisterRequest request, StreamObserver<AuthResponse> response) {
@@ -115,8 +118,7 @@ public class AuthServiceImpl extends AuthServiceGrpc.AuthServiceImplBase {
     @Override
     public void refreshToken(RefreshTokenRequest request, StreamObserver<AuthResponse> response) {
         AuthResponse.Builder responseBuilder = AuthResponse.newBuilder();
-        if (request.getRefreshToken().isBlank()) {
-
+        if (request.getRefreshToken().isBlank() || !jwtUtils.isTokenValid(request.getRefreshToken())) {
             formulateAResponse(
                     HttpResponseStatus.BAD_REQUEST.code(),
                     "BAD_REQUEST",
@@ -134,6 +136,28 @@ public class AuthServiceImpl extends AuthServiceGrpc.AuthServiceImplBase {
         response.onNext(responseBuilder.build());
         response.onCompleted();
     }
+
+    @Override
+    public void logout(LogoutRequest request, StreamObserver<AuthResponse> response) {
+        AuthResponse.Builder responseBuilder = AuthResponse.newBuilder();
+        if (request.getRefreshToken().isBlank() || !jwtUtils.isTokenValid(request.getRefreshToken())) {
+            formulateAResponse(
+                    HttpResponseStatus.BAD_REQUEST.code(),
+                    "BAD_REQUEST",
+                    "Incorrectly filled data in the request",
+                    responseBuilder
+            );
+            sendErrorMessage(responseBuilder, response);
+            return;
+        }
+        log.info("Logout start, all_session: {}", request.getAllSession());
+        tokenService.logout(request, responseBuilder);
+        log.info("Logout end, all_session: {}", request.getAllSession());
+
+        response.onNext(responseBuilder.build());
+        response.onCompleted();
+    }
+
 
     private void sendErrorMessage(AuthResponse.Builder responseBuilder, StreamObserver<AuthResponse> response) {
         AuthResponse result = responseBuilder.build();

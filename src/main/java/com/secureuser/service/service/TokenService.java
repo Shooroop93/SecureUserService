@@ -5,10 +5,12 @@ import com.secureuser.service.dto.TokenObject;
 import com.secureuser.service.model.Tokens;
 import com.secureuser.service.model.Users;
 import com.secureuser.service.proto.user.auth.AuthResponse;
+import com.secureuser.service.proto.user.auth.LogoutRequest;
 import com.secureuser.service.repository.TokensRepository;
 import com.secureuser.service.utils.JwtUtils;
 import com.secureuser.service.utils.TimeUtils;
 import io.grpc.netty.shaded.io.netty.handler.codec.http.HttpResponseStatus;
+import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -98,9 +100,17 @@ public class TokenService {
     @Transactional(isolation = Isolation.SERIALIZABLE)
     public void revokeAllUserTokens(Users user) {
         List<Tokens> validTokens = user.getTokens();
+        if (validTokens == null || validTokens.isEmpty()) {
+            return;
+        }
         validTokens.forEach(token -> {
             token.setRevoked(true);
-            redisService.delete(generateKeyName(token.getTokenType(), token.getToken()));
+            Claims claims = jwtUtils.getClaims(token.getToken());
+            if (claims != null) {
+                redisService.delete(generateKeyName(token.getTokenType(), claims.getId()));
+            } else {
+                log.warn("Failed to extract claims for token ID in revokeAllUserTokens()");
+            }
         });
         tokensRepository.saveAll(validTokens);
     }
@@ -112,9 +122,16 @@ public class TokenService {
             return;
         }
         validTokens.forEach(token -> {
-            if (token.getSessionId().equals(sessionId)) {
+            if (sessionId.equals(token.getSessionId())) {
                 token.setRevoked(true);
-                redisService.delete(generateKeyName(token.getTokenType(), token.getToken()));
+                Claims claims = jwtUtils.getClaims(token.getToken());
+                if (claims != null && claims.getId() != null) {
+                    String redisKey = generateKeyName(token.getTokenType(), claims.getId());
+                    redisService.delete(redisKey);
+                    log.info("Revoked token with session_id: {}, jti: {}", sessionId, claims.getId());
+                } else {
+                    log.warn("Could not revoke token from Redis — claims are null or malformed for session_id: {}", sessionId);
+                }
             }
         });
         tokensRepository.saveAll(validTokens);
@@ -151,6 +168,26 @@ public class TokenService {
         responseBuilder.setAccessToken(accessJWT.getToken());
         responseBuilder.setRefreshToken(refreshJWT.getToken());
         responseBuilder.setExpiresIn(accessJWT.getLifeTime());
+    }
+
+    @Transactional(isolation = Isolation.SERIALIZABLE)
+    public void logout(LogoutRequest request, AuthResponse.Builder responseBuilder) {
+        Optional<Tokens> tokensOptional = tokensRepository.findByToken(request.getRefreshToken());
+        if (tokensOptional.isEmpty()) {
+            formulateAResponse(HttpResponseStatus.UNAUTHORIZED.code(), "INVALID_CREDENTIALS", "The token is no longer valid", responseBuilder);
+            return;
+        }
+
+        Tokens token = tokensOptional.get();
+        Users owner = token.getOwner();
+        if (request.getAllSession()) {
+            log.info("Revoke All User Tokens");
+            revokeAllUserTokens(owner);
+        } else {
+            log.info("revoke All Tokens BySession Id: {}", token.getSessionId());
+            revokeAllTokensBySessionId(owner, token.getSessionId());
+        }
+        formulateAResponse(HttpResponseStatus.OK.code(), "OK", responseBuilder);
     }
 
     private String generateKeyName(String typeToken, String idToken) {
