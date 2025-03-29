@@ -35,6 +35,7 @@ message AuthResponse {
   int64 expires_in = 6;
   Error error = 7;
   string registration_confirmation_link = 8;
+  string session_id = 9;
 }
 
 message Error {

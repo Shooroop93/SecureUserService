@@ -4,6 +4,7 @@ import com.secureuser.service.constants.JWTokenType;
 import com.secureuser.service.dto.TokenObject;
 import com.secureuser.service.model.Tokens;
 import com.secureuser.service.model.Users;
+import com.secureuser.service.proto.user.auth.AuthResponse;
 import com.secureuser.service.repository.TokensRepository;
 import com.secureuser.service.utils.JwtUtils;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,8 +50,9 @@ class TokenServiceTest {
 
         when(jwtUtils.generateToken(any())).thenReturn("generated-jwt-token");
         when(tokensRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        UUID sessionId = UUID.randomUUID();
 
-        TokenObject tokenObject = tokenService.generateToken(user, JWTokenType.ACCESS);
+        TokenObject tokenObject = tokenService.generateToken(user, JWTokenType.ACCESS,sessionId);
 
         assertNotNull(tokenObject);
         assertEquals("generated-jwt-token", tokenObject.getToken());
@@ -73,7 +75,9 @@ class TokenServiceTest {
         when(jwtUtils.generateToken(any())).thenReturn("refresh-token");
         when(tokensRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        TokenObject tokenObject = tokenService.generateToken(user, JWTokenType.REFRESH);
+        UUID sessionId = UUID.randomUUID();
+
+        TokenObject tokenObject = tokenService.generateToken(user, JWTokenType.REFRESH, sessionId);
 
         assertNotNull(tokenObject);
         assertEquals("refresh-token", tokenObject.getToken());
@@ -142,5 +146,68 @@ class TokenServiceTest {
     void generateKeyName_shouldFormatCorrectly() {
         String result = ReflectionTestUtils.invokeMethod(tokenService, "generateKeyName", "ACCESS", "abc123");
         assertEquals("jwt:ACCESS:abc123", result);
+    }
+
+    @Test
+    void refreshToken_withValidRefreshToken_returnsNewTokens() {
+        UUID sessionId = UUID.randomUUID();
+        String oldRefreshToken = "valid.refresh.token";
+        Users user = new Users();
+        user.setLogin("testUser");
+        user.setId(UUID.randomUUID());
+
+        Tokens existingToken = new Tokens();
+        existingToken.setRevoked(false);
+        existingToken.setOwner(user);
+        existingToken.setSessionId(sessionId);
+        existingToken.setToken(oldRefreshToken);
+
+        when(tokensRepository.findByToken(oldRefreshToken)).thenReturn(Optional.of(existingToken));
+        when(jwtUtils.generateToken(any())).thenReturn("newAccessToken").thenReturn("newRefreshToken");
+
+        AuthResponse.Builder responseBuilder = AuthResponse.newBuilder();
+        tokenService.refreshToken(oldRefreshToken, responseBuilder);
+
+        AuthResponse response = responseBuilder.build();
+        assertEquals(200, response.getStatusCode());
+        assertEquals("OK", response.getMessageCode());
+        assertNotNull(response.getAccessToken());
+        assertNotNull(response.getRefreshToken());
+    }
+
+    @Test
+    void refreshToken_withRevokedToken_setsUnauthorizedError() {
+        String oldRefreshToken = "revoked.refresh.token";
+        Users user = new Users();
+        Tokens revokedToken = new Tokens();
+        revokedToken.setRevoked(true);
+        revokedToken.setOwner(user);
+        revokedToken.setToken(oldRefreshToken);
+
+        when(tokensRepository.findByToken(oldRefreshToken)).thenReturn(Optional.of(revokedToken));
+
+        AuthResponse.Builder responseBuilder = AuthResponse.newBuilder();
+        tokenService.refreshToken(oldRefreshToken, responseBuilder);
+
+        AuthResponse response = responseBuilder.build();
+        assertEquals(401, response.getStatusCode());
+        assertEquals("INVALID_CREDENTIALS", response.getMessageCode());
+        assertTrue(response.hasError());
+        assertEquals("The token is no longer valid", response.getError().getErrorMessage());
+    }
+
+    @Test
+    void refreshToken_withNonexistentToken_setsUnauthorizedError() {
+        String token = "nonexistent.token";
+
+        when(tokensRepository.findByToken(token)).thenReturn(Optional.empty());
+
+        AuthResponse.Builder responseBuilder = AuthResponse.newBuilder();
+        tokenService.refreshToken(token, responseBuilder);
+
+        AuthResponse response = responseBuilder.build();
+        assertEquals(401, response.getStatusCode());
+        assertEquals("INVALID_CREDENTIALS", response.getMessageCode());
+        assertTrue(response.hasError());
     }
 }
